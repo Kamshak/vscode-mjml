@@ -1,8 +1,10 @@
 "use strict";
 
 import * as vscode from "vscode";
+import * as nunjucks from "nunjucks";
 
 import helper from "./helper";
+import { existsSync } from "fs";
 
 export default class PreviewManager {
 
@@ -114,10 +116,12 @@ class MJMLView {
     private previewUri: vscode.Uri;
     private viewColumn: vscode.ViewColumn;
     private label: string;
+    private env = nunjucks.configure({ autoescape: true });
+
 
     constructor(document: vscode.TextDocument) {
         this.document = document;
-        this.provider = new PreviewContentProvider(this.document);
+        this.provider = new PreviewContentProvider(this.document, this.env);
 
         this.previewUri = this.createUri(document.uri);
         this.viewColumn = vscode.ViewColumn.Two;
@@ -191,7 +195,7 @@ class PreviewContentProvider implements vscode.TextDocumentContentProvider {
     private _onDidChange: vscode.EventEmitter<vscode.Uri> = new vscode.EventEmitter<vscode.Uri>();
     private document: vscode.TextDocument;
 
-    constructor(document: vscode.TextDocument) {
+    constructor(document: vscode.TextDocument, private env: nunjucks.Environment) {
         this.document = document;
     }
 
@@ -201,7 +205,9 @@ class PreviewContentProvider implements vscode.TextDocumentContentProvider {
 
     public update(uri: vscode.Uri): void {
         if (/mjml-preview/.test(uri.fsPath) && /sidebyside/.test(uri.fsPath)) {
-            if (vscode.window.activeTextEditor.document.fileName == this.document.fileName) {
+            const cache = (this.env as any).loaders[0].cache;
+            if (cache[vscode.window.activeTextEditor.document.uri.fsPath] || vscode.window.activeTextEditor.document.fileName == this.document.fileName) {
+                delete cache[vscode.window.activeTextEditor.document.uri.fsPath];
                 this._onDidChange.fire(uri);
             }
         }
@@ -216,11 +222,24 @@ class PreviewContentProvider implements vscode.TextDocumentContentProvider {
     }
 
     private renderMJML(): string {
-        let html: string = helper.mjml2html(this.document.getText(), false, false, this.document.uri.fsPath);
+        const template = this.document.getText();
 
-        if (html) {
-            return helper.fixLinks(html, this.document.uri.fsPath);
+        const Template = nunjucks.Template as any;
+        var tmpl: nunjucks.Template = new Template(
+            this.document.getText(),
+            this.env,
+            this.document.uri.fsPath, true);
+
+        try {
+            const rendered = tmpl.render();
+            let html: string = helper.mjml2html(rendered, false, false, this.document.uri.fsPath);
+            if (html) {
+                return helper.fixLinks(html, this.document.uri.fsPath);
+            }
+        } catch (e) {
+            return this.error(e.message);
         }
+
 
         return this.error("Active editor doesn't show a MJML document.");
     }
