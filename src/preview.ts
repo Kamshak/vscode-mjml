@@ -116,7 +116,7 @@ class MJMLView {
     private previewUri: vscode.Uri;
     private viewColumn: vscode.ViewColumn;
     private label: string;
-    private env = nunjucks.configure({ autoescape: true });
+    private env = nunjucks.configure({ autoescape: true, throwOnUndefined: true, watch: false });
 
 
     constructor(document: vscode.TextDocument) {
