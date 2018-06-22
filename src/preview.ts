@@ -4,7 +4,17 @@ import * as vscode from "vscode";
 import * as nunjucks from "nunjucks";
 
 import helper from "./helper";
-import { existsSync } from "fs";
+import OpenDocumentLink from "./openLink";
+const Template = nunjucks.Template as any;
+
+function escapeHtml(unsafe) {
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+ }
 
 export default class PreviewManager {
 
@@ -116,7 +126,7 @@ class MJMLView {
     private previewUri: vscode.Uri;
     private viewColumn: vscode.ViewColumn;
     private label: string;
-    private env = nunjucks.configure({ autoescape: true, throwOnUndefined: true, watch: false });
+    private env = nunjucks.configure({ autoescape: true, throwOnUndefined: true, watch: false, dev: false } as any);
 
 
     constructor(document: vscode.TextDocument) {
@@ -222,30 +232,80 @@ class PreviewContentProvider implements vscode.TextDocumentContentProvider {
     }
 
     private renderMJML(): string {
-        const template = this.document.getText();
-
-        const Template = nunjucks.Template as any;
-        var tmpl: nunjucks.Template = new Template(
-            this.document.getText(),
-            this.env,
-            this.document.uri.fsPath, true);
-
+        let rendered;
         try {
-            const rendered = tmpl.render();
+            var tmpl: nunjucks.Template = new Template(
+                this.document.getText(),
+                this.env,
+                this.document.uri.fsPath, true);
+            rendered = tmpl.render();
             let html: string = helper.mjml2html(rendered, false, false, this.document.uri.fsPath);
             if (html) {
                 return helper.fixLinks(html, this.document.uri.fsPath);
             }
         } catch (e) {
-            return this.error(e.message);
+            return this.error(e, rendered);
         }
-
 
         return this.error("Active editor doesn't show a MJML document.");
     }
 
-    private error(error: string): string {
-        return `<body>${error}</body>`;
+    private error(error: any, mjml?: string): string {
+        if (typeof error === 'object') {
+            if (error.length) {
+                const messages = error.map(err => {
+ /*                 const regex = /of (.*?) \(/ig;
+                    const matches = regex.exec(err.formattedMessage);
+                    const link = matches ? `<a style="color:white" href="${OpenDocumentLink.createCommandUri(matches[1], 'L' + err.line)}"><h3 style="margin-bottom: 1rem">Line ${err.line}</h3></a>` : '';
+ */                 let codePart = '';
+                    if (mjml) {
+                        const offendingLine = mjml.split('\n')[err.line - 1];
+                        codePart = mjml.split('\n').slice(err.line - 4, err.line + 2).map((line, index) => `
+                            <div style="white-space: pre-wrap;${line === offendingLine ? 'background-color: #ff8787' : ''}">${escapeHtml(line)}</div>
+                        `).join('');
+                    }
+                    return `<div style="margin-bottom: 1rem">
+                        <h4>Error: ${err.formattedMessage}</h4>
+                        <div style="font-family: monospace; margin-top: 0.5rem; color: #322; background-color: #EEE; padding: 1rem; border-radius: 4px">
+                            ${codePart}
+                        </div>
+                    </div>`;
+                });
+                return `
+                    <head>
+                        <base href="${this.document.uri.with({ scheme: 'vscode-workspace-resource' }).toString(true)}">
+                    </head>
+                    <body style="background:#AD2222; padding: 20px; color: white">
+                        <h1 style="margin-bottom: 0.5rem;">Errors rendering MJML</h1>
+                        ${messages}
+                    </body>
+                `;
+            }
+
+            if (error.name) {
+                return `
+                    <body style="background:#AD2222; padding: 20px; color: white">
+                        <h1 style="margin-bottom: 0.5rem;">Error</h1>
+                        <p style="margin-bottom: 1rem">${error.name}</p>
+                        <div style="font-family: monospace; white-space: pre-wrap; margin-top: 0.5rem; color: #322; background-color: #EEE; padding: 1rem; border-radius: 4px">${error.message}</div>
+                    </body>
+                `;
+            }
+            return `
+                <body style="background:#AD2222; padding: 20px; color: white">
+                    <h1 style="margin-bottom: 0.5rem;">Error</h1>
+                    <p style="margin-bottom: 1rem">${error.message}</p>
+                    <div style="font-family: monospace; white-space: pre-wrap; margin-top: 0.5rem; color: #322; background-color: #EEE; padding: 1rem; border-radius: 4px">${error.stack}</div>
+                </body>
+            `;
+        }
+
+        return `
+            <body style="background:#AD2222; padding: 20px; color: white">
+                <h1 style="margin-bottom: 0.5rem;">Error</h1>
+                <p style="margin-bottom: 1rem">${error}</p>
+            </body>
+        `;
     }
 
 }

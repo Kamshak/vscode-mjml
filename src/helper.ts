@@ -38,25 +38,24 @@ export default class Helper {
     }
 
     static mjml2html(mjml: string, minify: boolean, beautify: boolean, mjmlPath?: string): string {
-        try {
-            if (!mjmlPath) {
-                mjmlPath = this.getPath();
-            }
-
-            let { html, errors } = mjml2html(mjml, {
-                level: "skip",
-                minify: minify,
-                beautify: beautify,
-                filePath: mjmlPath,
-                cwd: this.getCWD(mjmlPath)
-            });
-
-            if (html) {
-                return html;
-            }
+        if (!mjmlPath) {
+            mjmlPath = this.getPath();
         }
-        catch (err) {
-            return;
+
+        let { html, errors } = mjml2html(mjml, {
+            level: "skip",
+            minify: minify,
+            beautify: beautify,
+            filePath: mjmlPath,
+            cwd: this.getCWD(mjmlPath)
+        });
+
+        if (errors && errors.length) {
+            throw errors;
+        }
+
+        if (html) {
+            return html;
         }
     }
 

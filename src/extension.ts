@@ -17,6 +17,7 @@ import Screenshot from "./screenshot";
 import Template from "./template";
 
 import helper from "./helper";
+import OpenDocumentLink from "./openLink";
 
 let beautify: Beautify;
 let copyHTML: CopyHTML;
@@ -27,6 +28,7 @@ let migrate: Migrate;
 let previewManager: PreviewManager;
 let screenshot: Screenshot;
 let template: Template;
+let openLink: OpenDocumentLink;
 
 export function activate(context: vscode.ExtensionContext) {
     // Gets a value indicating whether PhantomJS could be built
@@ -91,6 +93,7 @@ export function activate(context: vscode.ExtensionContext) {
     migrate = new Migrate(context.subscriptions);
     previewManager = new PreviewManager(context);
     template = new Template(context.subscriptions);
+    openLink = new OpenDocumentLink(context.subscriptions);
 }
 
 export function deactivate() {
